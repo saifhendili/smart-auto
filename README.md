@@ -1,138 +1,203 @@
-# Smart Auto — Application MERN
+# Smart Auto
 
-Plateforme IA d'analyse de pièces automobiles : on importe une image, l'IA extrait les
-informations de la pièce, vérifie si elle existe déjà en base et notifie l'utilisateur.
-Le catalogue permet de consulter toutes les pièces enregistrées.
+AI-powered automotive parts analysis platform. Upload a photo of a part, and the AI extracts its name, brand, type, reference number, year, and location — then checks if it already exists in the database and notifies you accordingly.
 
-Implémente le cahier des charges **Smart Auto** (RF1–RF10) — voir `../SMART_AUTO_MERN.md`.
+## Tech Stack
 
-## Stack
+| Layer | Technology |
+|-------|-----------|
+| Database | MongoDB + Mongoose |
+| Backend | Express / Node.js — REST API + AI orchestration |
+| Frontend | React (Vite) — PWA installable from the browser |
+| AI Vision | Google Gemini `gemini-2.5-flash` (free tier) |
+| Desktop | Electron — native Windows `.exe` (Node embedded) |
 
-- **MongoDB** + Mongoose — stockage des pièces / utilisateurs
-- **Express / Node.js** — API REST + orchestration IA + déduplication
-- **React (Vite)** — interface (upload, résultats, catalogue), **PWA installable**
-- **Google Gemini `gemini-2.5-flash`** (vision + JSON, **niveau gratuit**) — reconnaissance et extraction
-- **Electron** — packaging en application desktop Windows (`.exe`), Node embarqué
+---
 
-## Arborescence
+## Prerequisites
+
+Before starting, make sure you have:
+
+- **Node.js 18+** — https://nodejs.org/
+- **MongoDB** — either a local installation or a free [MongoDB Atlas](https://www.mongodb.com/atlas) cluster
+- **Google Gemini API key** (free) — https://aistudio.google.com/apikey
+
+---
+
+## Starting from Scratch
+
+### Step 1 — Configure the environment
+
+Edit `server/.env` and fill in the two required values:
+
+```env
+MONGO_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/smart-auto?retryWrites=true&w=majority
+GEMINI_API_KEY=your_key_here
+```
+
+> `JWT_SECRET` should be changed to a long random string for any non-local deployment.
+
+### Step 2 — Install dependencies
+
+**Backend:**
+```bash
+cd server
+npm install
+```
+
+**Frontend:**
+```bash
+cd client
+npm install
+```
+
+### Step 3 — Build the frontend (production mode)
+
+```bash
+cd client
+npm run build
+```
+
+This compiles React + the PWA into `client/dist/`. The Express server then serves it automatically on the same port as the API.
+
+### Step 4 — Start the server
+
+```bash
+cd server
+npm start
+```
+
+Open **http://localhost:5000** in your browser. The app is ready.
+
+---
+
+### Development mode (hot reload)
+
+Run backend and frontend in separate terminals:
+
+```bash
+# Terminal 1 — API with file-watch restart
+cd server && npm run dev
+
+# Terminal 2 — Vite dev server with HMR
+cd client && npm run dev
+```
+
+- Frontend: http://localhost:5173 (proxies `/api` and `/uploads` to port 5000)
+- Backend: http://localhost:5000
+
+---
+
+## Windows Desktop App (.exe)
+
+Smart Auto ships as a native Windows application using Electron. The `.exe` bundles the server and UI — **no Node.js or browser required on the end-user machine**.
+
+### Option A — Quick test (no installer)
+
+Double-click **`run-desktop.bat`**
+
+This builds the React UI and opens the app in an Electron window. Requires Node.js to be installed on the machine.
+
+### Option B — Build a distributable installer
+
+Follow these steps to produce a real Windows installer:
+
+**1. Run `install.bat`** (once)
+
+Double-click `install.bat`. It will:
+- Install Node.js automatically via `winget` if not found
+- Install all backend, frontend, and Electron dependencies
+- Build the frontend
+
+> If Node.js was just installed: **close the window, reopen it, then run `install.bat` again.**
+
+**2. Configure `server\.env`**
+
+Open `server\.env` in any text editor and set:
+
+```
+MONGO_URI=mongodb://localhost:27017/smart-auto
+GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+**3. Run `build-desktop.bat`**
+
+Double-click `build-desktop.bat`. This:
+- Installs root-level Electron dependencies
+- Compiles the UI
+- Packages everything with `electron-builder`
+- Produces `dist\Smart Auto Setup 1.0.0.exe`
+
+**4. Install and run**
+
+Double-click the generated `.exe`. It installs Smart Auto like any standard Windows application — with a desktop shortcut and a Start menu entry.
+
+> When the app launches, it starts the embedded Express server internally. Uploaded images are stored in `%APPDATA%\Smart Auto\uploads`.
+
+---
+
+## Web App — Run Without Building an .exe
+
+If you just want to run the app in a browser on Windows:
+
+1. Double-click **`install.bat`** — installs everything and builds the UI
+2. Fill in `server\.env`
+3. Double-click **`start.bat`** — starts the server and opens http://localhost:5000
+
+### Install as a PWA (optional)
+
+Once http://localhost:5000 is open in Chrome or Edge:
+- Click the **Install** icon in the address bar, or go to menu ⋮ → *Install Smart Auto*
+- The app gets its own icon on the desktop and opens like a native window
+
+---
+
+## Project Structure
 
 ```
 smart-auto/
-├── server/        # API Express + Mongoose + service IA (Gemini)
-├── client/        # React (Vite) + PWA
-├── electron/      # Process principal Electron (app desktop)
-├── install.bat / start.bat / start-dev.bat         # web
-├── run-desktop.bat / build-desktop.bat             # app desktop (.exe)
-└── package.json   # config Electron + electron-builder
+├── server/              # Express API + Mongoose + Gemini vision service
+│   ├── src/
+│   │   ├── server.js    # entry point (dotenv + DB connect + listen)
+│   │   ├── app.js       # Express app (routes, middleware, static serving)
+│   │   ├── routes/
+│   │   ├── controllers/
+│   │   ├── services/    # visionService.js (Gemini calls)
+│   │   ├── models/
+│   │   └── utils/
+│   ├── uploads/         # stored images (dev); AppData in desktop build
+│   └── .env             # ← fill this in
+├── client/              # React (Vite) + PWA
+│   ├── src/
+│   └── dist/            # compiled output (generated by npm run build)
+├── electron/
+│   └── main.js          # Electron main process
+├── install.bat          # Windows: install Node + all deps + build
+├── start.bat            # Windows: start web server → browser
+├── start-dev.bat        # Windows: start both dev servers (two terminals)
+├── run-desktop.bat      # Windows: quick Electron test
+├── build-desktop.bat    # Windows: build distributable .exe
+└── package.json         # Electron + electron-builder config
 ```
-
-## Prérequis
-
-- Node.js 18+
-- Une instance MongoDB (locale ou Atlas)
-- Une clé API Google Gemini gratuite (`GEMINI_API_KEY`) — https://aistudio.google.com/apikey
-
-## 🪟 Installation directe sur Windows (recommandé)
-
-Aucune commande à taper — l'application est livrée avec des scripts qui installent
-**Node.js** (via `winget`) et **toutes les dépendances** automatiquement :
-
-1. **Double-cliquez sur `install.bat`**
-   → installe Node.js si absent, puis les dépendances backend + frontend, et compile l'application.
-   *(Si Node vient d'être installé : fermez la fenêtre, rouvrez-en une, relancez `install.bat`.)*
-2. Ouvrez `server\.env` et renseignez `MONGO_URI` et `GEMINI_API_KEY`.
-3. **Double-cliquez sur `start.bat`**
-   → lance le serveur et ouvre `http://localhost:5000` dans le navigateur.
-
-## 🖥️ Application desktop (.exe Electron)
-
-Pour une **vraie application Windows** (fenêtre native, Node embarqué, **aucun navigateur
-ni installation de Node requis** chez l'utilisateur final) :
-
-| Script | Rôle |
-|--------|------|
-| `run-desktop.bat` | **Test rapide** : compile l'UI et ouvre l'app dans une fenêtre Electron |
-| `build-desktop.bat` | **Crée l'installateur** `dist\Smart Auto Setup <version>.exe` |
-
-Étapes pour produire l'installateur distribuable :
-
-1. `install.bat` (une fois) — Node + dépendances
-2. Renseignez `server\.env` (`MONGO_URI`, `GEMINI_API_KEY`)
-3. **Double-cliquez sur `build-desktop.bat`**
-   → génère `dist\Smart Auto Setup 1.0.0.exe`
-4. Cet `.exe` s'installe comme n'importe quel logiciel Windows (raccourci bureau + menu Démarrer).
-
-> L'app embarque le serveur Node + l'UI ; au lancement elle démarre le serveur en interne et
-> affiche l'interface dans une fenêtre native. La config (MongoDB, Gemini) est lue depuis le
-> `server\.env` embarqué. Les images uploadées sont stockées dans `%APPDATA%\Smart Auto\uploads`.
 
 ---
 
-### 📱 Installer comme application (PWA)
+## API Reference
 
-Une fois `http://localhost:5000` ouvert dans **Chrome / Edge** :
-- Cliquez sur l'icône **« Installer »** dans la barre d'adresse (ou menu ⋮ → *Installer Smart Auto*).
-- L'application s'ajoute avec son icône (bureau Windows / écran d'accueil mobile) et s'ouvre
-  en plein écran, comme une vraie application.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/pieces/analyze` | Upload image → dedup → AI extraction → ref check → notification |
+| `POST` | `/api/pieces/check-image` | Check if image already exists by SHA-256 hash |
+| `GET` | `/api/pieces` | Paginated catalog with search |
+| `GET` | `/api/pieces/:id` | Part detail |
+| `DELETE` | `/api/pieces/:id` | Delete part (requires JWT admin) |
+| `POST` | `/api/auth/register` | Register a new user |
+| `POST` | `/api/auth/login` | Login and receive JWT |
 
-> Sur Windows, l'installation PWA fonctionne directement sur `localhost`.
-> Pour l'installer depuis un **téléphone**, il faut servir l'app en HTTPS (ex. via `ngrok`)
-> et définir `PUBLIC_URL` sur l'URL publique.
+### Analysis flow
 
----
-
-## Démarrage manuel (Linux / macOS, ou développement)
-
-### Production (un seul serveur)
-
-```bash
-cd client && npm install && npm run build   # compile l'app + la PWA
-cd ../server && npm install
-cp .env.example .env                         # renseigner MONGO_URI, JWT_SECRET, GEMINI_API_KEY
-npm start                                    # http://localhost:5000 (sert l'app + l'API)
-```
-
-Le serveur Express sert automatiquement `client/dist` s'il existe → application installable
-servie sur le même port que l'API.
-
-### Développement (rechargement à chaud)
-
-```bash
-cd server && npm run dev      # http://localhost:5000
-cd client && npm run dev      # http://localhost:5173 (proxy /api + /uploads vers 5000)
-```
-
-Sur Windows, `start-dev.bat` ouvre les deux serveurs dans deux fenêtres.
-
-## API
-
-| Méthode | Endpoint | Description | Exigence |
-|---------|----------|-------------|----------|
-| `POST` | `/api/pieces/analyze` | Upload image → dédup → analyse IA → vérification réf. → notification | RF1–RF10 |
-| `POST` | `/api/pieces/check-image` | Vérifie via le hash si l'image existe (sans analyse) | RF8 N1 |
-| `GET` | `/api/pieces` | Catalogue paginé + recherche | RF9 |
-| `GET` | `/api/pieces/:id` | Fiche détaillée | RF9 |
-| `DELETE` | `/api/pieces/:id` | Suppression (admin, JWT) | — |
-| `POST` | `/api/auth/register` · `/api/auth/login` | Authentification JWT | — |
-
-## Flux d'analyse (RF1–RF10)
-
-1. **RF8 niveau 1** — hash SHA-256 de l'image ; si l'image existe déjà → renvoi immédiat (sans IA).
-2. **RF2–RF5** — le modèle de vision analyse l'image et extrait nom, marque, type, référence, année, description, emplacement.
-3. **RF10** — vérification de la **référence** extraite en base ; l'utilisateur est notifié (existe / nouvelle).
-4. **RF8 niveau 3** — sinon, recherche par caractéristiques (même pièce, image/réf. différentes).
-5. **RF7** — sinon, enregistrement de la nouvelle pièce (image + données + empreinte).
-
-Chaque réponse `analyze` renvoie un objet `verification { exists, by, message }` que le
-frontend transforme en bandeau (vert = existe déjà, bleu = nouvelle).
-
-## Mapping des exigences → code
-
-| Exigence | Emplacement |
-|----------|-------------|
-| RF1 | `client/.../UploadForm.jsx` + `server/.../middleware/upload.js` |
-| RF2–RF5 | `server/.../services/visionService.js` |
-| RF7 | `server/.../controllers/pieceController.js` (`Piece.create`) |
-| RF8 | `pieceController.js` (`analyzePiece`, `checkImage`) + `utils/hash.js` |
-| RF9 | `client/.../PiecesCatalog.jsx` + `PieceDetail.jsx` + `GET /api/pieces` |
-| RF10 | `pieceController.js` (objet `verification`) + `client/.../Notification.jsx` |
+1. **Hash check** — SHA-256 of the image; if already exists → immediate return (no AI call)
+2. **AI extraction** — Gemini vision extracts: name, brand, type, reference, year, description, location
+3. **Reference check** — looks up the extracted reference in the DB; notifies user (exists / new)
+4. **Characteristics check** — if not found by ref, searches by matching fields
+5. **Save** — if genuinely new, stores the part with image path and hash

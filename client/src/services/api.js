@@ -24,6 +24,11 @@ export async function fetchPieces(params = {}) {
   return data;
 }
 
+export async function fetchFilters() {
+  const { data } = await api.get('/pieces/filters');
+  return data;
+}
+
 export async function fetchPiece(id) {
   const { data } = await api.get(`/pieces/${id}`);
   return data;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { updatePiece, deletePiece } from '../services/api.js';
+import { updatePiece, deletePiece, fetchFilters } from '../services/api.js';
 
 // RF3–RF5 : fiche d'informations d'une pièce (consultation + édition + suppression)
 const SOURCE_LABEL = {
@@ -20,12 +20,19 @@ const FIELDS = [
   ['emplacement', 'Emplacement', 'text'],
 ];
 
+const PREDEFINED_CATEGORIES = [
+  'Moteur', 'Transmission', 'Freinage', 'Suspension', 'Direction',
+  'Électrique', 'Carrosserie', 'Intérieur', 'Climatisation',
+  'Échappement', 'Alimentation', 'Refroidissement', 'Autre',
+];
+
 export default function PieceResult({ piece: initial, allowDelete = false, onUpdated, onDeleted }) {
   const [piece, setPiece] = useState(initial);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [categories, setCategories] = useState(PREDEFINED_CATEGORIES);
 
   // Re-synchronise si le parent fournit une autre pièce (ex: nouvelle analyse)
   useEffect(() => {
@@ -39,6 +46,7 @@ export default function PieceResult({ piece: initial, allowDelete = false, onUpd
   function startEdit() {
     setForm({
       nom: piece.nom || '',
+      categorie: piece.categorie || '',
       marqueVehicule: piece.marqueVehicule || '',
       typeVehicule: piece.typeVehicule || '',
       reference: piece.reference || '',
@@ -48,6 +56,12 @@ export default function PieceResult({ piece: initial, allowDelete = false, onUpd
     });
     setError(null);
     setEditing(true);
+    fetchFilters()
+      .then(({ categories: dbCats }) => {
+        const merged = Array.from(new Set([...PREDEFINED_CATEGORIES, ...dbCats])).sort();
+        setCategories(merged);
+      })
+      .catch(() => {});
   }
 
   async function save(e) {
@@ -80,6 +94,7 @@ export default function PieceResult({ piece: initial, allowDelete = false, onUpd
   }
 
   const specs = [
+    ['Catégorie', piece.categorie],
     ['Marque du véhicule', piece.marqueVehicule],
     ['Type du véhicule', piece.typeVehicule],
     ['Référence', piece.reference],
@@ -117,7 +132,21 @@ export default function PieceResult({ piece: initial, allowDelete = false, onUpd
 
         {editing ? (
           <form className="edit-form" onSubmit={save}>
+            <datalist id="cat-list">
+              {categories.map((c) => <option key={c} value={c} />)}
+            </datalist>
+
             <div className="edit-grid">
+              <label className="field edit-grid-full">
+                <span>Catégorie</span>
+                <input
+                  type="text"
+                  list="cat-list"
+                  placeholder="Sélectionner ou saisir une catégorie…"
+                  value={form.categorie}
+                  onChange={(e) => setForm((f) => ({ ...f, categorie: e.target.value }))}
+                />
+              </label>
               {FIELDS.map(([key, label, type]) => (
                 <label key={key} className="field">
                   <span>{label}</span>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchPieces } from '../services/api.js';
+import { fetchPieces, fetchFilters } from '../services/api.js';
 
 function SearchIcon() {
   return (
@@ -11,48 +11,116 @@ function SearchIcon() {
   );
 }
 
-// RF9 : consulter toutes les données enregistrées (catalogue + recherche)
+function FilterIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M3 6h18M7 12h10M11 18h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ChevronRight() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="m9 18 6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// RF9 : consulter toutes les données enregistrées (catalogue + recherche + filtres)
 export default function PiecesCatalog() {
   const [data, setData] = useState({ items: [], total: 0, page: 1, pages: 1 });
+  const [filters, setFilters] = useState({ categories: [], couleurs: [] });
   const [q, setQ] = useState('');
+  const [category, setCategory] = useState('');
+  const [couleur, setCouleur] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    fetchFilters().then(setFilters).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     let active = true;
     setLoading(true);
-    fetchPieces({ q, page, limit: 12 })
+    const params = { page, limit: 20 };
+    if (q) params.q = q;
+    if (category) params.categorie = category;
+    if (couleur) params.couleur = couleur;
+    fetchPieces(params)
       .then((res) => active && setData(res))
       .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
-  }, [q, page]);
+    return () => { active = false; };
+  }, [q, category, couleur, page]);
+
+  const hasFilters = q || category || couleur;
+
+  function clearFilters() {
+    setQ('');
+    setCategory('');
+    setCouleur('');
+    setPage(1);
+  }
 
   return (
     <section>
+      {/* ── Header ── */}
       <div className="catalog-head">
         <h2 className="section-title">
-          Catalogue des pièces <span className="count-pill">{data.total}</span>
+          Parts Catalog <span className="count-pill">{data.total}</span>
         </h2>
         <div className="search">
           <SearchIcon />
           <input
             type="search"
-            placeholder="Rechercher par nom ou référence…"
+            placeholder="Search by name or reference…"
             value={q}
-            onChange={(e) => {
-              setPage(1);
-              setQ(e.target.value);
-            }}
+            onChange={(e) => { setPage(1); setQ(e.target.value); }}
           />
         </div>
       </div>
 
+      {/* ── Filter bar ── */}
+      <div className="filter-bar">
+        <span className="filter-label">
+          <FilterIcon /> Filters
+        </span>
+
+        <select
+          className="filter-select"
+          value={category}
+          onChange={(e) => { setPage(1); setCategory(e.target.value); }}
+        >
+          <option value="">All categories</option>
+          {filters.categories.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+
+        <select
+          className="filter-select"
+          value={couleur}
+          onChange={(e) => { setPage(1); setCouleur(e.target.value); }}
+        >
+          <option value="">All colors</option>
+          {filters.couleurs.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+
+        {hasFilters && (
+          <button className="btn btn-ghost filter-clear" onClick={clearFilters}>
+            Clear
+          </button>
+        )}
+      </div>
+
+      {/* ── List ── */}
       {loading ? (
-        <div className="skeleton-grid">
+        <div className="list-view">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="skeleton card" />
+            <div key={i} className="skeleton list-skeleton" />
           ))}
         </div>
       ) : data.items.length === 0 ? (
@@ -64,40 +132,56 @@ export default function PiecesCatalog() {
               <circle cx="8" cy="9.5" r="1.4" fill="currentColor" />
             </svg>
           </div>
-          <h3>Aucune pièce enregistrée</h3>
+          <h3>{hasFilters ? 'No parts match your filters' : 'No parts recorded yet'}</h3>
           <p className="muted">
-            Analysez une première image depuis l’onglet <Link to="/">Analyser</Link>.
+            {hasFilters ? (
+              <button className="btn-link" onClick={clearFilters}>Clear filters</button>
+            ) : (
+              <>Analyze an image from the <Link to="/">Analyze</Link> tab.</>
+            )}
           </p>
         </div>
       ) : (
-        <div className="grid">
+        <div className="list-view">
           {data.items.map((p) => (
-            <Link to={`/pieces/${p._id}`} key={p._id} className="grid-card">
-              <div className="thumb">
+            <Link to={`/pieces/${p._id}`} key={p._id} className="list-row">
+              <div className="list-thumb">
                 <img src={p.imageUrl} alt={p.nom} loading="lazy" />
               </div>
-              <div className="meta">
-                <strong>{p.nom}</strong>
-                <span>
-                  {[p.marqueVehicule, p.typeVehicule].filter(Boolean).join(' ') || 'Véhicule non précisé'}
+
+              <div className="list-info">
+                <strong className="list-name">{p.nom}</strong>
+                <span className="list-sub">
+                  {[p.marqueVehicule, p.typeVehicule].filter(Boolean).join(' · ') || 'Vehicle unspecified'}
                 </span>
-                {p.reference && <span className="chip">Réf. {p.reference}</span>}
               </div>
+
+              <div className="list-meta">
+                {p.categorie && <span className="chip chip-cat">{p.categorie}</span>}
+                {p.reference && <span className="chip">Ref. {p.reference}</span>}
+                {p.couleur && <span className="chip chip-color">{p.couleur}</span>}
+                {p.anneeFabrication > 0 && (
+                  <span className="list-year">{p.anneeFabrication}</span>
+                )}
+              </div>
+
+              <span className="list-arrow">
+                <ChevronRight />
+              </span>
             </Link>
           ))}
         </div>
       )}
 
+      {/* ── Pagination ── */}
       {data.pages > 1 && (
         <div className="pagination">
           <button className="btn btn-ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-            ← Précédent
+            ← Previous
           </button>
-          <span>
-            Page {data.page} sur {data.pages}
-          </span>
+          <span>Page {data.page} of {data.pages}</span>
           <button className="btn btn-ghost" disabled={page >= data.pages} onClick={() => setPage((p) => p + 1)}>
-            Suivant →
+            Next →
           </button>
         </div>
       )}

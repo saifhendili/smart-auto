@@ -43,6 +43,11 @@ RÈGLES :
         },
         // Champs structurés finaux
         nom: { type: 'string', description: 'Nom de la pièce automobile' },
+        categorie: {
+          type: 'string',
+          description:
+            "Catégorie de la pièce parmi : Moteur, Transmission, Freinage, Suspension, Direction, Électrique, Carrosserie, Intérieur, Climatisation, Échappement, Alimentation, Refroidissement, Autre",
+        },
         marqueVehicule: {
           type: 'string',
           description: 'Marque du véhicule (meilleure estimation déduite si non écrite ; vide si indéterminable)',
@@ -59,6 +64,7 @@ RÈGLES :
           type: 'integer',
           description: "Année estimée d'après la période de production du modèle (0 si indéterminable)",
         },
+        couleur: { type: 'string', description: 'Couleur de la pièce (vide si indéterminable)' },
         description: { type: 'string', description: 'Description automatique de la pièce' },
         emplacement: { type: 'string', description: 'Emplacement de la pièce dans le véhicule' },
         confiance: {
@@ -70,10 +76,12 @@ RÈGLES :
         'texteVisible',
         'indices',
         'nom',
+        'categorie',
         'marqueVehicule',
         'typeVehicule',
         'reference',
         'anneeFabrication',
+        'couleur',
         'description',
         'emplacement',
         'confiance',

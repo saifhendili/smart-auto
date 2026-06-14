@@ -181,11 +181,13 @@ export async function listPieces(req, res, next) {
   try {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, parseInt(req.query.limit, 10) || 12);
-    const { marque, type, q } = req.query;
+    const { marque, type, categorie, couleur, q } = req.query;
 
     const filter = {};
     if (marque) filter.marqueVehicule = new RegExp(marque, 'i');
     if (type) filter.typeVehicule = new RegExp(type, 'i');
+    if (categorie) filter.categorie = new RegExp(categorie, 'i');
+    if (couleur) filter.couleur = new RegExp(couleur, 'i');
     if (q) filter.$or = [{ nom: new RegExp(q, 'i') }, { reference: new RegExp(q, 'i') }];
 
     const [items, total] = await Promise.all([
@@ -194,6 +196,19 @@ export async function listPieces(req, res, next) {
     ]);
 
     return res.json({ items, total, page, pages: Math.ceil(total / limit) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** GET /api/pieces/filters — valeurs distinctes pour les filtres du catalogue. */
+export async function getFilters(req, res, next) {
+  try {
+    const [categories, couleurs] = await Promise.all([
+      Piece.distinct('categorie').then((v) => v.filter(Boolean).sort()),
+      Piece.distinct('couleur').then((v) => v.filter(Boolean).sort()),
+    ]);
+    return res.json({ categories, couleurs });
   } catch (err) {
     next(err);
   }
@@ -232,6 +247,8 @@ export async function updatePiece(req, res, next) {
       set.typeVehicule = b.typeVehicule;
       set.typeNorm = normVehicule(b.typeVehicule);
     }
+    if ('categorie' in b) set.categorie = b.categorie;
+    if ('couleur' in b) set.couleur = b.couleur;
     if ('description' in b) set.description = b.description;
     if ('emplacement' in b) set.emplacement = b.emplacement;
     // Référence/année vides → on les retire (évite de violer l'unicité sparse)
