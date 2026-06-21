@@ -11,14 +11,6 @@ function SearchIcon() {
   );
 }
 
-function FilterIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M3 6h18M7 12h10M11 18h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 function ChevronRight() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -27,41 +19,59 @@ function ChevronRight() {
   );
 }
 
-// RF9 : consulter toutes les données enregistrées (catalogue + recherche + filtres)
+const EMPTY_FILTERS = {
+  categories: [], couleurs: [], marques: [], types: [], annees: [],
+};
+
 export default function PiecesCatalog() {
-  const [data, setData] = useState({ items: [], total: 0, page: 1, pages: 1 });
-  const [filters, setFilters] = useState({ categories: [], couleurs: [] });
-  const [q, setQ] = useState('');
-  const [category, setCategory] = useState('');
-  const [couleur, setCouleur] = useState('');
-  const [page, setPage] = useState(1);
+  const [data,    setData]    = useState({ items: [], total: 0, page: 1, pages: 1 });
+  const [opts,    setOpts]    = useState(EMPTY_FILTERS);
   const [loading, setLoading] = useState(true);
+  const [page,    setPage]    = useState(1);
+
+  // Filter state
+  const [q,        setQ]        = useState('');
+  const [category, setCategory] = useState('');
+  const [couleur,  setCouleur]  = useState('');
+  const [marque,   setMarque]   = useState('');
+  const [type,     setType]     = useState('');
+  const [yearMin,  setYearMin]  = useState('');
+  const [yearMax,  setYearMax]  = useState('');
 
   useEffect(() => {
-    fetchFilters().then(setFilters).catch(() => {});
+    fetchFilters().then(setOpts).catch(() => {});
   }, []);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     const params = { page, limit: 20 };
-    if (q) params.q = q;
+    if (q)        params.q        = q;
     if (category) params.categorie = category;
-    if (couleur) params.couleur = couleur;
+    if (couleur)  params.couleur  = couleur;
+    if (marque)   params.marque   = marque;
+    if (type)     params.type     = type;
+    if (yearMin)  params.yearMin  = yearMin;
+    if (yearMax)  params.yearMax  = yearMax;
     fetchPieces(params)
       .then((res) => active && setData(res))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [q, category, couleur, page]);
+  }, [q, category, couleur, marque, type, yearMin, yearMax, page]);
 
-  const hasFilters = q || category || couleur;
+  const hasFilters = q || category || couleur || marque || type || yearMin || yearMax;
+
+  function resetPage() { setPage(1); }
 
   function clearFilters() {
-    setQ('');
-    setCategory('');
-    setCouleur('');
+    setQ(''); setCategory(''); setCouleur('');
+    setMarque(''); setType(''); setYearMin(''); setYearMax('');
     setPage(1);
   }
+
+  // Active filter count badge
+  const activeCount = [q, category, couleur, marque, type, yearMin || yearMax]
+    .filter(Boolean).length;
 
   return (
     <section>
@@ -76,45 +86,99 @@ export default function PiecesCatalog() {
             type="search"
             placeholder="Search by name or reference…"
             value={q}
-            onChange={(e) => { setPage(1); setQ(e.target.value); }}
+            onChange={(e) => { resetPage(); setQ(e.target.value); }}
           />
         </div>
       </div>
 
-      {/* ── Filter bar ── */}
-      <div className="filter-bar">
-        <span className="filter-label">
-          <FilterIcon /> Filters
-        </span>
+      {/* ── Filter panel ── */}
+      <div className="filter-panel">
+        <div className="filter-panel-head">
+          <span className="filter-panel-title">
+            Filters {activeCount > 0 && <span className="count-pill">{activeCount}</span>}
+          </span>
+          {hasFilters && (
+            <button className="btn-link" onClick={clearFilters}>Clear all</button>
+          )}
+        </div>
 
-        <select
-          className="filter-select"
-          value={category}
-          onChange={(e) => { setPage(1); setCategory(e.target.value); }}
-        >
-          <option value="">All categories</option>
-          {filters.categories.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
+        <div className="filter-grid">
+          {/* Category */}
+          <div className="filter-field">
+            <label className="filter-field-label">Category</label>
+            <select className="filter-select" value={category}
+              onChange={(e) => { resetPage(); setCategory(e.target.value); }}>
+              <option value="">All</option>
+              {opts.categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
 
-        <select
-          className="filter-select"
-          value={couleur}
-          onChange={(e) => { setPage(1); setCouleur(e.target.value); }}
-        >
-          <option value="">All colors</option>
-          {filters.couleurs.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
+          {/* Brand */}
+          <div className="filter-field">
+            <label className="filter-field-label">Brand</label>
+            <select className="filter-select" value={marque}
+              onChange={(e) => { resetPage(); setMarque(e.target.value); }}>
+              <option value="">All</option>
+              {opts.marques.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
 
-        {hasFilters && (
-          <button className="btn btn-ghost filter-clear" onClick={clearFilters}>
-            Clear
-          </button>
-        )}
+          {/* Model / vehicle type */}
+          <div className="filter-field">
+            <label className="filter-field-label">Model</label>
+            <select className="filter-select" value={type}
+              onChange={(e) => { resetPage(); setType(e.target.value); }}>
+              <option value="">All</option>
+              {opts.types.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+
+          {/* Color */}
+          <div className="filter-field">
+            <label className="filter-field-label">Color</label>
+            <select className="filter-select" value={couleur}
+              onChange={(e) => { resetPage(); setCouleur(e.target.value); }}>
+              <option value="">All</option>
+              {opts.couleurs.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+
+          {/* Year range */}
+          <div className="filter-field filter-field-year">
+            <label className="filter-field-label">Year</label>
+            <div className="year-range">
+              <select className="filter-select" value={yearMin}
+                onChange={(e) => { resetPage(); setYearMin(e.target.value); }}>
+                <option value="">From</option>
+                {[...opts.annees].reverse().map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <span className="year-sep">–</span>
+              <select className="filter-select" value={yearMax}
+                onChange={(e) => { resetPage(); setYearMax(e.target.value); }}>
+                <option value="">To</option>
+                {opts.annees.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* ── Active filter chips ── */}
+      {hasFilters && (
+        <div className="active-chips">
+          {category && <Chip label={`Category: ${category}`} onRemove={() => { setCategory(''); resetPage(); }} />}
+          {marque   && <Chip label={`Brand: ${marque}`}      onRemove={() => { setMarque('');   resetPage(); }} />}
+          {type     && <Chip label={`Model: ${type}`}        onRemove={() => { setType('');     resetPage(); }} />}
+          {couleur  && <Chip label={`Color: ${couleur}`}     onRemove={() => { setCouleur('');  resetPage(); }} />}
+          {(yearMin || yearMax) && (
+            <Chip
+              label={`Year: ${yearMin || '…'} – ${yearMax || '…'}`}
+              onRemove={() => { setYearMin(''); setYearMax(''); resetPage(); }}
+            />
+          )}
+          {q && <Chip label={`"${q}"`} onRemove={() => { setQ(''); resetPage(); }} />}
+        </div>
+      )}
 
       {/* ── List ── */}
       {loading ? (
@@ -134,11 +198,9 @@ export default function PiecesCatalog() {
           </div>
           <h3>{hasFilters ? 'No parts match your filters' : 'No parts recorded yet'}</h3>
           <p className="muted">
-            {hasFilters ? (
-              <button className="btn-link" onClick={clearFilters}>Clear filters</button>
-            ) : (
-              <>Analyze an image from the <Link to="/">Analyze</Link> tab.</>
-            )}
+            {hasFilters
+              ? <button className="btn-link" onClick={clearFilters}>Clear all filters</button>
+              : <>Analyze an image from the <Link to="/">Analyze</Link> tab.</>}
           </p>
         </div>
       ) : (
@@ -148,26 +210,19 @@ export default function PiecesCatalog() {
               <div className="list-thumb">
                 <img src={p.imageUrl} alt={p.nom} loading="lazy" />
               </div>
-
               <div className="list-info">
                 <strong className="list-name">{p.nom}</strong>
                 <span className="list-sub">
                   {[p.marqueVehicule, p.typeVehicule].filter(Boolean).join(' · ') || 'Vehicle unspecified'}
                 </span>
               </div>
-
               <div className="list-meta">
-                {p.categorie && <span className="chip chip-cat">{p.categorie}</span>}
-                {p.reference && <span className="chip">Ref. {p.reference}</span>}
-                {p.couleur && <span className="chip chip-color">{p.couleur}</span>}
-                {p.anneeFabrication > 0 && (
-                  <span className="list-year">{p.anneeFabrication}</span>
-                )}
+                {p.categorie        && <span className="chip chip-cat">{p.categorie}</span>}
+                {p.reference        && <span className="chip">Ref. {p.reference}</span>}
+                {p.couleur          && <span className="chip chip-color">{p.couleur}</span>}
+                {p.anneeFabrication > 0 && <span className="list-year">{p.anneeFabrication}</span>}
               </div>
-
-              <span className="list-arrow">
-                <ChevronRight />
-              </span>
+              <span className="list-arrow"><ChevronRight /></span>
             </Link>
           ))}
         </div>
@@ -186,5 +241,14 @@ export default function PiecesCatalog() {
         </div>
       )}
     </section>
+  );
+}
+
+function Chip({ label, onRemove }) {
+  return (
+    <span className="active-chip">
+      {label}
+      <button onClick={onRemove} aria-label="Remove filter">×</button>
+    </span>
   );
 }

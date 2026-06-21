@@ -220,6 +220,145 @@ h1 {
   color: var(--primary-hover);
 }
 
+/* ---------- Mode tabs (single / batch) ---------- */
+.mode-tabs {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 1.5rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.3rem;
+  width: fit-content;
+}
+.mode-tab {
+  padding: 0.45rem 1.1rem;
+  border: none;
+  border-radius: calc(var(--r) - 3px);
+  background: transparent;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.mode-tab:hover { background: var(--surface); color: var(--text); }
+.mode-tab.active {
+  background: var(--surface);
+  color: var(--primary);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---------- Batch upload ---------- */
+.batch-wrap { display: flex; flex-direction: column; gap: 1rem; }
+
+.batch-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 160px;
+  padding: 1.5rem;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  cursor: pointer;
+  text-align: center;
+  color: var(--text-2);
+  transition: border-color 0.18s, background 0.18s;
+}
+.batch-drop:hover { border-color: var(--primary); background: var(--primary-weak); }
+.batch-drop svg { color: var(--primary); margin-bottom: 0.25rem; }
+.batch-drop strong { font-size: 1rem; color: var(--text); }
+.batch-drop span { font-size: 0.85rem; color: var(--text-3); }
+
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.batch-count { font-size: 0.9rem; color: var(--text-2); font-weight: 500; }
+
+.batch-progress-wrap { display: flex; flex-direction: column; gap: 0.4rem; }
+.batch-progress-bar {
+  height: 8px;
+  background: var(--surface-2);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.batch-progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: var(--r-pill);
+  transition: width 0.4s ease;
+}
+.batch-progress-label {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: var(--text-2);
+  flex-wrap: wrap;
+}
+.batch-ratelimit { color: var(--amber); font-weight: 600; }
+.batch-summary { color: var(--text-2); }
+
+.batch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 460px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface);
+  padding: 0.4rem;
+}
+.batch-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: var(--r-sm);
+  font-size: 0.85rem;
+  border-left: 3px solid transparent;
+}
+.batch-fname {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+.batch-status { font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.batch-info {
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+/* Row state colours */
+.bs-pending    { background: var(--surface-2); border-color: var(--border); }
+.bs-pending .batch-status  { color: var(--text-3); }
+.bs-processing { background: var(--info-bg); border-color: var(--info); }
+.bs-processing .batch-status { color: var(--info); }
+.bs-done       { background: var(--success-bg); border-color: var(--success); }
+.bs-done .batch-status { color: var(--success); }
+.bs-dup        { background: var(--amber-bg); border-color: var(--amber); }
+.bs-dup .batch-status  { color: var(--amber); }
+.bs-error      { background: var(--danger-bg); border-color: var(--danger); }
+.bs-error .batch-status { color: var(--danger); }
+.bs-retry      { background: var(--amber-bg); border-color: var(--amber); }
+.bs-retry .batch-status { color: var(--amber); }
+
 /* ---------- Upload ---------- */
 .upload {
   margin-top: 0.5rem;
@@ -553,30 +692,49 @@ h1 {
   font-size: 0.86rem;
 }
 
-/* ---------- Filter bar ---------- */
-.filter-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-  margin-bottom: 1.1rem;
-  padding: 0.65rem 0.85rem;
+/* ---------- Filter panel ---------- */
+.filter-panel {
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r);
 }
-.filter-label {
+.filter-panel-head {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+.filter-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+}
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.65rem;
+}
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.filter-field-label {
+  font-size: 0.76rem;
   font-weight: 600;
   color: var(--text-3);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  margin-right: 0.25rem;
 }
 .filter-select {
+  width: 100%;
   padding: 0.42rem 2rem 0.42rem 0.7rem;
   border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
@@ -593,11 +751,50 @@ h1 {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-border);
 }
-.filter-clear {
-  margin-left: auto;
-  padding: 0.38rem 0.8rem;
-  font-size: 0.84rem;
+.filter-field-year { grid-column: span 2; }
+.year-range {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
+.year-range .filter-select { flex: 1; }
+.year-sep {
+  color: var(--text-3);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* Active filter chips */
+.active-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.85rem;
+}
+.active-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.55rem;
+  background: var(--primary-weak);
+  border: 1px solid var(--primary-border);
+  border-radius: var(--r-pill);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--primary-hover);
+}
+.active-chip button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--primary);
+  font-size: 1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+.active-chip button:hover { color: var(--danger); }
 
 /* ---------- List view ---------- */
 .list-view {

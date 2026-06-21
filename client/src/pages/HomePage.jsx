@@ -5,8 +5,8 @@ export default function HomePage() {
     <section>
       <h1>Analyse de pièces automobiles</h1>
       <p className="lead">
-        Importez la photo d’une pièce : l’intelligence artificielle l’identifie, extrait
-        automatiquement ses informations et vous indique si elle existe déjà dans la base.
+        Importez une ou plusieurs photos : l'IA identifie chaque pièce, extrait ses
+        informations et vérifie si elle existe déjà dans la base.
       </p>
       <UploadForm />
     </section>

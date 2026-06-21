@@ -181,13 +181,18 @@ export async function listPieces(req, res, next) {
   try {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, parseInt(req.query.limit, 10) || 12);
-    const { marque, type, categorie, couleur, q } = req.query;
+    const { marque, type, categorie, couleur, yearMin, yearMax, q } = req.query;
 
     const filter = {};
-    if (marque) filter.marqueVehicule = new RegExp(marque, 'i');
-    if (type) filter.typeVehicule = new RegExp(type, 'i');
-    if (categorie) filter.categorie = new RegExp(categorie, 'i');
-    if (couleur) filter.couleur = new RegExp(couleur, 'i');
+    if (marque)    filter.marqueVehicule  = new RegExp(marque, 'i');
+    if (type)      filter.typeVehicule    = new RegExp(type, 'i');
+    if (categorie) filter.categorie       = new RegExp(categorie, 'i');
+    if (couleur)   filter.couleur         = new RegExp(couleur, 'i');
+    if (yearMin || yearMax) {
+      filter.anneeFabrication = {};
+      if (yearMin) filter.anneeFabrication.$gte = Number(yearMin);
+      if (yearMax) filter.anneeFabrication.$lte = Number(yearMax);
+    }
     if (q) filter.$or = [{ nom: new RegExp(q, 'i') }, { reference: new RegExp(q, 'i') }];
 
     const [items, total] = await Promise.all([
@@ -204,11 +209,16 @@ export async function listPieces(req, res, next) {
 /** GET /api/pieces/filters — valeurs distinctes pour les filtres du catalogue. */
 export async function getFilters(req, res, next) {
   try {
-    const [categories, couleurs] = await Promise.all([
+    const [categories, couleurs, marques, types, annees] = await Promise.all([
       Piece.distinct('categorie').then((v) => v.filter(Boolean).sort()),
       Piece.distinct('couleur').then((v) => v.filter(Boolean).sort()),
+      Piece.distinct('marqueVehicule').then((v) => v.filter(Boolean).sort()),
+      Piece.distinct('typeVehicule').then((v) => v.filter(Boolean).sort()),
+      Piece.distinct('anneeFabrication').then((v) =>
+        v.filter(Boolean).sort((a, b) => b - a)
+      ),
     ]);
-    return res.json({ categories, couleurs });
+    return res.json({ categories, couleurs, marques, types, annees });
   } catch (err) {
     next(err);
   }
