@@ -305,6 +305,7 @@ h1 {
   color: var(--text-2);
   flex-wrap: wrap;
 }
+.batch-phase { color: var(--primary); font-weight: 600; }
 .batch-ratelimit { color: var(--amber); font-weight: 600; }
 .batch-summary { color: var(--text-2); }
 

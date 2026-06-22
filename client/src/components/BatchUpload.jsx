@@ -1,208 +1,230 @@
 import { useCallback, useRef, useState } from 'react';
-import { analyzePiece } from '../services/api.js';
+import { analyzePiece, checkImage } from '../services/api.js';
 
-// Gemini free tier: 10 RPM → 7s between real AI calls is safe.
-// Duplicates (hash/ref) are caught before the AI, so no delay needed for them.
-const AI_DELAY_MS = 7_000;
-const RETRY_DELAY_MS = 65_000; // wait 65s after a 429 rate-limit hit
-
-const ST = {
-  pending:    { label: 'En attente',  cls: 'bs-pending'    },
-  processing: { label: 'En cours…',   cls: 'bs-processing' },
-  done:       { label: 'Enregistré',  cls: 'bs-done'       },
-  duplicate:  { label: 'Doublon',     cls: 'bs-dup'        },
-  error:      { label: 'Erreur',      cls: 'bs-error'      },
-  retry:      { label: 'Limite IA – reprise dans…', cls: 'bs-retry' },
-};
+// ── Rate limit strategy ──────────────────────────────────────────────────────
+//
+// Phase 1  — run checkImage() for ALL files IN PARALLEL (pure DB hash lookup,
+//            no AI involved → no rate limit concern).
+//            Duplicates are marked immediately and skipped from phase 2.
+//
+// Phase 2  — run analyzePiece() ONLY for new images, one at a time.
+//            We wait BEFORE each call (proactive), not after hitting a 429.
+//            Target: 4 req/min = 15 s between calls → comfortably under any limit.
+//
+const SAFE_RPM    = 4;
+const INTERVAL_MS = Math.ceil(60_000 / SAFE_RPM); // 15 000 ms
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
-function isRateLimit(err) {
-  const msg = (err?.response?.data?.message || err?.message || '').toLowerCase();
-  return msg.includes('429') || msg.includes('quota') || msg.includes('rate');
-}
+const ST = {
+  pending:    { label: 'Pending',     cls: 'bs-pending'    },
+  checking:   { label: 'Checking…',   cls: 'bs-processing' },
+  waiting:    { label: 'Waiting…',    cls: 'bs-retry'      },
+  processing: { label: 'Analyzing…',  cls: 'bs-processing' },
+  done:       { label: 'Saved',       cls: 'bs-done'       },
+  duplicate:  { label: 'Duplicate',   cls: 'bs-dup'        },
+  error:      { label: 'Error',       cls: 'bs-error'      },
+};
 
 export default function BatchUpload() {
-  const [items, setItems]     = useState([]);   // { file, name, status, info }
+  const [items,   setItems]   = useState([]);
   const [running, setRunning] = useState(false);
-  const [done, setDone]       = useState(0);
-  const [retryIn, setRetryIn] = useState(0);
-  const stopRef   = useRef(false);
-  const timerRef  = useRef(null);
+  const [phase,   setPhase]   = useState('');   // 'checking' | 'analyzing' | ''
+  const [done,    setDone]    = useState(0);
+  const [waitSec, setWaitSec] = useState(0);
+  const stopRef = useRef(false);
 
-  // ── file picking ──────────────────────────────────────────────
+  // ── file selection ───────────────────────────────────────────────────────
   const addFiles = useCallback((files) => {
     const next = Array.from(files)
       .filter((f) => f.type.startsWith('image/'))
       .map((f) => ({ file: f, name: f.name, status: 'pending', info: '' }));
     if (!next.length) return;
     setItems((prev) => [...prev, ...next]);
-    setDone(0);
   }, []);
 
   function onInput(e) { addFiles(e.target.files); e.target.value = ''; }
+  function onDrop(e)  { e.preventDefault(); addFiles(e.dataTransfer.files); }
 
-  function onDrop(e) {
-    e.preventDefault();
-    addFiles(e.dataTransfer.files);
-  }
-
-  // ── status helpers ────────────────────────────────────────────
   function patch(idx, update) {
     setItems((prev) => prev.map((it, i) => i === idx ? { ...it, ...update } : it));
   }
 
-  // ── countdown for rate-limit retry ───────────────────────────
-  async function countdown(seconds, idx) {
-    for (let s = seconds; s > 0 && !stopRef.current; s--) {
-      setRetryIn(s);
-      patch(idx, { info: `Rate limit — reprise dans ${s}s` });
-      await sleep(1_000);
+  // ── countdown helper (shown between AI calls) ────────────────────────────
+  async function waitWithCountdown(ms) {
+    let remaining = ms;
+    while (remaining > 0 && !stopRef.current) {
+      setWaitSec(Math.ceil(remaining / 1_000));
+      await sleep(Math.min(1_000, remaining));
+      remaining -= 1_000;
     }
-    setRetryIn(0);
+    setWaitSec(0);
   }
 
-  // ── main queue runner ─────────────────────────────────────────
+  // ── main runner ──────────────────────────────────────────────────────────
   async function start() {
     if (running) return;
     stopRef.current = false;
     setRunning(true);
     setDone(0);
+    setWaitSec(0);
 
     const pending = items
       .map((it, i) => ({ ...it, idx: i }))
       .filter((it) => it.status === 'pending');
 
-    let aiCallCount = 0;
+    if (!pending.length) { setRunning(false); return; }
 
-    for (const { file, idx } of pending) {
-      if (stopRef.current) break;
+    // ── PHASE 1 : parallel hash checks (no AI, no rate limit) ──────────────
+    setPhase('checking');
+    pending.forEach(({ idx }) => patch(idx, { status: 'checking', info: '' }));
 
-      patch(idx, { status: 'processing', info: '' });
-
-      let attempts = 0;
-      let success  = false;
-
-      while (!success && !stopRef.current) {
+    const checkResults = await Promise.all(
+      pending.map(async ({ file, idx }) => {
         try {
-          const res = await analyzePiece(file);
-          const isNew = res.source === 'ai';
-
-          if (res.verification?.exists) {
-            patch(idx, { status: 'duplicate', info: res.verification.message });
-          } else {
-            patch(idx, { status: 'done', info: res.piece?.nom || 'Enregistré' });
-          }
-
-          // Only delay after a genuine AI call
-          if (isNew) {
-            aiCallCount++;
-            const isLast = pending[pending.length - 1].idx === idx;
-            if (!isLast && !stopRef.current) await sleep(AI_DELAY_MS);
-          }
-
-          success = true;
-          setDone((n) => n + 1);
-
-        } catch (err) {
-          if (isRateLimit(err) && attempts < 3) {
-            attempts++;
-            patch(idx, { status: 'retry' });
-            await countdown(Math.round(RETRY_DELAY_MS / 1000), idx);
-            if (stopRef.current) break;
-          } else {
-            const msg = err?.response?.data?.message || err?.message || 'Erreur inconnue';
-            patch(idx, { status: 'error', info: msg });
-            success = true;
-            setDone((n) => n + 1);
-          }
+          const res = await checkImage(file);
+          return { idx, file, isDuplicate: res.exists, piece: res.piece };
+        } catch {
+          return { idx, file, isDuplicate: false };
         }
+      })
+    );
+
+    // Mark phase-1 duplicates immediately
+    const toAnalyze = [];
+    for (const r of checkResults) {
+      if (r.isDuplicate) {
+        patch(r.idx, {
+          status: 'duplicate',
+          info: r.piece?.nom ? `Already in DB: ${r.piece.nom}` : 'Already in DB',
+        });
+        setDone((n) => n + 1);
+      } else {
+        toAnalyze.push(r);
       }
     }
 
+    // ── PHASE 2 : rate-limited AI calls for new images only ─────────────────
+    setPhase('analyzing');
+    let lastCallStart = 0;
+
+    for (let i = 0; i < toAnalyze.length; i++) {
+      if (stopRef.current) break;
+
+      const { idx, file } = toAnalyze[i];
+
+      // Proactive wait BEFORE the call (never touch the limit)
+      if (i > 0) {
+        const elapsed = Date.now() - lastCallStart;
+        const toWait  = INTERVAL_MS - elapsed;
+        if (toWait > 0) {
+          patch(idx, { status: 'waiting', info: '' });
+          await waitWithCountdown(toWait);
+        }
+      }
+
+      if (stopRef.current) break;
+
+      patch(idx, { status: 'processing', info: '' });
+      lastCallStart = Date.now();
+
+      try {
+        const res = await analyzePiece(file);
+
+        if (res.verification?.exists) {
+          patch(idx, { status: 'duplicate', info: res.verification.message });
+        } else {
+          patch(idx, { status: 'done', info: res.piece?.nom || 'Saved' });
+        }
+      } catch (err) {
+        const msg = err?.response?.data?.message || err?.message || 'Unknown error';
+        patch(idx, { status: 'error', info: msg });
+      }
+
+      setDone((n) => n + 1);
+    }
+
+    setPhase('');
     setRunning(false);
+    setWaitSec(0);
   }
 
   function stop() {
     stopRef.current = true;
-    clearTimeout(timerRef.current);
     setRunning(false);
-    setRetryIn(0);
+    setPhase('');
+    setWaitSec(0);
     setItems((prev) =>
-      prev.map((it) => it.status === 'processing' || it.status === 'retry'
-        ? { ...it, status: 'pending', info: '' }
-        : it
+      prev.map((it) =>
+        ['checking', 'waiting', 'processing'].includes(it.status)
+          ? { ...it, status: 'pending', info: '' }
+          : it
       )
     );
   }
 
-  function clear() {
-    stop();
-    setItems([]);
-    setDone(0);
-  }
+  function clear() { stop(); setItems([]); setDone(0); }
 
-  // ── derived ───────────────────────────────────────────────────
+  // ── derived stats ────────────────────────────────────────────────────────
   const total    = items.length;
   const pending  = items.filter((i) => i.status === 'pending').length;
   const progress = total ? Math.round((done / total) * 100) : 0;
-
-  const summary = {
+  const summary  = {
     done:      items.filter((i) => i.status === 'done').length,
     duplicate: items.filter((i) => i.status === 'duplicate').length,
     error:     items.filter((i) => i.status === 'error').length,
   };
 
-  // ── render ────────────────────────────────────────────────────
+  // ── render ────────────────────────────────────────────────────────────────
   return (
     <div className="batch-wrap">
 
       {/* Drop zone */}
-      <label
-        className="batch-drop"
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={onDrop}
-      >
+      <label className="batch-drop" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M12 16V6m0 0-3.5 3.5M12 6l3.5 3.5M5 17v1a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1"
-            stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+            stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        <strong>Déposez des images ici, ou cliquez pour sélectionner</strong>
-        <span>JPG, PNG — plusieurs fichiers autorisés</span>
+        <strong>Drop images here, or click to select</strong>
+        <span>JPG, PNG — unlimited files</span>
         <input type="file" accept="image/*" multiple onChange={onInput} hidden />
       </label>
 
       {/* Actions */}
       {total > 0 && (
         <div className="batch-actions">
-          <span className="batch-count">{total} image{total > 1 ? 's' : ''} sélectionnée{total > 1 ? 's' : ''}</span>
+          <span className="batch-count">{total} image{total !== 1 ? 's' : ''} selected</span>
           {!running ? (
             <>
               <button className="btn btn-primary" onClick={start} disabled={pending === 0}>
-                ▶ Lancer l'analyse
+                ▶ Start analysis
               </button>
-              <button className="btn btn-ghost" onClick={clear}>Vider</button>
+              <button className="btn btn-ghost" onClick={clear}>Clear</button>
             </>
           ) : (
-            <button className="btn btn-danger" onClick={stop}>⏹ Arrêter</button>
+            <button className="btn btn-danger" onClick={stop}>⏹ Stop</button>
           )}
         </div>
       )}
 
-      {/* Progress bar */}
+      {/* Progress */}
       {total > 0 && (
         <div className="batch-progress-wrap">
           <div className="batch-progress-bar">
             <div className="batch-progress-fill" style={{ width: `${progress}%` }} />
           </div>
           <div className="batch-progress-label">
-            <span>{done} / {total} traitées</span>
-            {retryIn > 0 && (
-              <span className="batch-ratelimit">⏳ Limite IA — reprise dans {retryIn}s</span>
+            {phase === 'checking'  && <span className="batch-phase">⚡ Phase 1 — checking duplicates…</span>}
+            {phase === 'analyzing' && <span className="batch-phase">🤖 Phase 2 — AI analysis ({SAFE_RPM} req/min)</span>}
+            <span>{done} / {total} processed</span>
+            {waitSec > 0 && (
+              <span className="batch-ratelimit">⏱ Next image in {waitSec}s</span>
             )}
             {!running && done > 0 && (
               <span className="batch-summary">
-                ✅ {summary.done} &nbsp;·&nbsp; ⚠️ {summary.duplicate} doublons &nbsp;·&nbsp; ❌ {summary.error} erreurs
+                ✅ {summary.done} saved &nbsp;·&nbsp;
+                ⚠️ {summary.duplicate} duplicates &nbsp;·&nbsp;
+                ❌ {summary.error} errors
               </span>
             )}
           </div>
