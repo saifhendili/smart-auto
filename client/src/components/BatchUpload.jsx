@@ -8,11 +8,12 @@ import { analyzePiece, checkImage } from '../services/api.js';
 //            Duplicates are marked immediately and skipped from phase 2.
 //
 // Phase 2  — run analyzePiece() ONLY for new images, one at a time.
-//            We wait BEFORE each call (proactive), not after hitting a 429.
-//            Target: 4 req/min = 15 s between calls → comfortably under any limit.
+//            Each image now uses 2 Gemini calls (search + extract).
+//            gemini-2.0-flash free tier: 15 RPM → safe at 6 images/min (12 calls/min).
+//            We wait BEFORE each call (proactive), never touching the limit.
 //
-const SAFE_RPM    = 4;
-const INTERVAL_MS = Math.ceil(60_000 / SAFE_RPM); // 15 000 ms
+const SAFE_RPM    = 6;
+const INTERVAL_MS = Math.ceil(60_000 / SAFE_RPM); // 10 000 ms
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
