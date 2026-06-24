@@ -130,6 +130,13 @@ export default function PieceResult({ piece: initial, allowDelete = false, onUpd
           </div>
         )}
 
+        {!editing && typeof piece.confiance === 'number' && piece.confiance < 0.6 && (
+          <div className="notif notif-warning" style={{ marginBottom: '0.75rem' }}>
+            <span className="notif-ico">⚠</span>
+            <p>Confiance faible. Vérifiez et corrigez la marque/modèle avant d'enregistrer.</p>
+          </div>
+        )}
+
         {editing ? (
           <form className="edit-form" onSubmit={save}>
             <datalist id="cat-list">

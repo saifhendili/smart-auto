@@ -9,11 +9,11 @@ import { analyzePiece, checkImage } from '../services/api.js';
 //
 // Phase 2  — run analyzePiece() ONLY for new images, one at a time.
 //            Each image now uses 2 Gemini calls (search + extract).
-//            gemini-2.0-flash free tier: 15 RPM → safe at 6 images/min (12 calls/min).
+//            gemini-2.5-flash free tier: 10 RPM → safe at 5 images/min (10 calls/min).
 //            We wait BEFORE each call (proactive), never touching the limit.
 //
-const SAFE_RPM    = 6;
-const INTERVAL_MS = Math.ceil(60_000 / SAFE_RPM); // 10 000 ms
+const SAFE_RPM    = 5;
+const INTERVAL_MS = Math.ceil(60_000 / SAFE_RPM); // 12 000 ms
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 

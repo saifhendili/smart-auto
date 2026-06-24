@@ -3,12 +3,11 @@ import { analyzePiece } from '../services/api.js';
 import Notification from './Notification.jsx';
 import PieceResult from './PieceResult.jsx';
 
-/* ── Rate-limit helpers (Gemini free: 8 req/min safe limit) ─── */
-// We target 8 RPM → minimum 7.5 s between request STARTS.
-// Measured from the moment each request fires (not when it returns),
-// so fast responses don't accidentally push us over the limit.
-const RPM_LIMIT      = 8;
-const INTERVAL_MS    = Math.ceil(60_000 / RPM_LIMIT); // 7 500 ms
+/* ── Rate-limit helpers (Gemini 2.5-flash free: 10 req/min) ─── */
+// Each upload triggers 2 Gemini calls (search + extract), so we target
+// 5 RPM → minimum 12 s between request STARTS.
+const RPM_LIMIT      = 5;
+const INTERVAL_MS    = Math.ceil(60_000 / RPM_LIMIT); // 12 000 ms
 const RETRY_DELAY_MS = 65_000;
 
 const ST = {
@@ -306,8 +305,8 @@ export default function UploadForm() {
         >
           <span className="dz-hint">
             <span className="dz-icon"><UploadIcon /></span>
-            <strong>Déposez une ou plusieurs images, ou cliquez pour parcourir</strong>
-            <span>Ctrl + V pour coller · JPG, PNG · sélection multiple autorisée</span>
+            <strong>Déposez une image, ou cliquez pour parcourir</strong>
+            <span>1 image = analyse rapide · 2+ images = mode batch · Ctrl + V pour coller · JPG, PNG</span>
           </span>
           <input type="file" accept="image/*" multiple onChange={(e) => selectFiles(e.target.files)} hidden />
         </label>

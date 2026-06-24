@@ -475,6 +475,15 @@ h1 {
   background: var(--danger);
   color: #fff;
 }
+.notif-warning {
+  background: var(--amber-bg);
+  border-color: var(--amber-border);
+  color: var(--amber);
+}
+.notif-warning .notif-ico {
+  background: var(--amber);
+  color: #fff;
+}
 
 /* ---------- Carte pièce ---------- */
 .panel {
