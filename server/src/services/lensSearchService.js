@@ -49,7 +49,7 @@ const PROVIDERS = {
  * Collect all API keys from env.
  * Supports both LENS_API_KEY (single) and LENS_API_KEYS (comma-separated list).
  */
-function getApiKeys() {
+export function getApiKeys() {
   const keys = [];
   if (process.env.LENS_API_KEYS) {
     keys.push(...process.env.LENS_API_KEYS.split(',').map((k) => k.trim()).filter(Boolean));
@@ -88,12 +88,14 @@ function extractError(json, fallbackText) {
 export async function lensSearch(buffer, mediaType) {
   const providerName = process.env.LENS_API_PROVIDER || 'serpapi';
   const provider = PROVIDERS[providerName];
+
+  const keys = getApiKeys();
+  console.log(`[lensSearch] provider=${providerName}, keys loaded=${keys.length}`);
   if (!provider) {
     console.warn(`[lensSearch] unknown provider ${providerName}`);
     return null;
   }
 
-  const keys = getApiKeys();
   if (!keys.length) return null;
 
   // Upload image once — the public URL is reused for every key attempt.
