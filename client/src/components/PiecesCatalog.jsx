@@ -84,7 +84,7 @@ export default function PiecesCatalog() {
           <SearchIcon />
           <input
             type="search"
-            placeholder="Search by name or reference…"
+            placeholder="Search by name, reference, brand, model, year…"
             value={q}
             onChange={(e) => { resetPage(); setQ(e.target.value); }}
           />
