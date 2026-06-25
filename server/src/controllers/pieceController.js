@@ -193,7 +193,24 @@ export async function listPieces(req, res, next) {
       if (yearMin) filter.anneeFabrication.$gte = Number(yearMin);
       if (yearMax) filter.anneeFabrication.$lte = Number(yearMax);
     }
-    if (q) filter.$or = [{ nom: new RegExp(q, 'i') }, { reference: new RegExp(q, 'i') }];
+    if (q) {
+      const re = new RegExp(q, 'i');
+      const numericQ = Number(q);
+      const or = [
+        { nom: re },
+        { reference: re },
+        { marqueVehicule: re },
+        { typeVehicule: re },
+        { categorie: re },
+        { couleur: re },
+        { description: re },
+        { emplacement: re },
+      ];
+      if (!Number.isNaN(numericQ) && q.trim() !== '') {
+        or.push({ anneeFabrication: numericQ });
+      }
+      filter.$or = or;
+    }
 
     const [items, total] = await Promise.all([
       Piece.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
