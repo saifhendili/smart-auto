@@ -51,11 +51,9 @@ const PROVIDERS = {
  */
 export function getApiKeys() {
   const keys = [];
-  if (process.env.LENS_API_KEYS) {
-    keys.push(...process.env.LENS_API_KEYS.split(',').map((k) => k.trim()).filter(Boolean));
-  }
-  if (process.env.LENS_API_KEY) {
-    keys.push(process.env.LENS_API_KEY.trim());
+  // Both vars accept a single key or a comma-separated list.
+  for (const raw of [process.env.LENS_API_KEYS, process.env.LENS_API_KEY]) {
+    if (raw) keys.push(...raw.split(',').map((k) => k.trim()).filter(Boolean));
   }
   // Remove duplicates while preserving order.
   return [...new Set(keys)];
